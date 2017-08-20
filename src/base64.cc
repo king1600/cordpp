@@ -7,9 +7,9 @@
 char *cordpp::b64_encode(const char *src, size_t length) {
     // (length * 4 / 3) rounded up to nearest multiple of 4
     size_t encoded_length = ((length<<2)/3+3)&-4;
-    char *buffer = (char*)malloc((sizeof *buffer) * encoded_length + 1);
+    char *buffer = new char[encoded_length + 1];
 
-    if (buffer == NULL) {
+    if (buffer == nullptr) {
         printf("Call to malloc() in io::b64_encode() failed. Exiting...");
         exit(EXIT_FAILURE);
     }
@@ -24,6 +24,8 @@ char *cordpp::b64_encode(const char *src, size_t length) {
         *p++ = B64_CHARSET[src[i+2] & 0x3F];
     }
 
+    // this returns 3 instead of 0 if we need no padding but
+    // if we need no padding we dont need to do anything
     int padding = (length % 3)^3;
 
     if (padding == 1) {
@@ -48,11 +50,11 @@ char *cordpp::b64_decode(const char *src, size_t length) {
     if (length % 4 != 0)
         return nullptr;
 
-    size_t buffer_length = (length * 3 >> 2) + 1;
+    // instead of figuring out exactly how long the decoded string should be
+    // allocate enough. at most this is an extra 2 bytes
+    char *buffer = new char[(length * 3 >> 2) + 1];
 
-    char *buffer = (char *)malloc((sizeof *buffer) * buffer_length);
-
-    if (buffer == NULL) {
+    if (buffer == nullptr) {
         printf("Call to malloc() in io::b64_decode() failed. Exiting...");
         exit(EXIT_FAILURE);
     }
@@ -80,8 +82,6 @@ char *cordpp::b64_decode(const char *src, size_t length) {
     }
 
     *p = '\0';
-
-    printf("in: %lu | out %lu | decoded: %s\n", length, buffer_length, buffer);
 
     return buffer;
 }
