@@ -1,28 +1,14 @@
-#include "ssl.h"
-#include <iostream>
+#include "http.h"
 
 using namespace cordpp;
 
 int main() {
   Service loop;
-  SSLClient client(loop);
+  RestClient client(loop);
+  client.set_token("");
 
-  client.connect("www.google.com", 443, [&](const Error &err) {
-    std::cout << "Connected" << std::endl;
-    std::string req = "GET /humans.txt HTTP/1.1\r\nHost: www.google.com\r\n\r\n";
-    client.write(req);
-
-    client.read_until("\r\n\r\n", [&client](const Buffer &data) {
-      std::cout << "Got Headers: ";
-      std::cout.write(&data[0], data.size());
-      std::cout << std::endl << std::endl;
-
-      client.read([](const Buffer &data) {
-        std::cout << "Got body: ";
-        std::cout.write(&data[0], data.size());
-        std::cout << std::endl;
-      });
-    });
+  client.request("GET", "/gateway/bot", "", {}, [](const Json &data) {
+    std::cout << "Handling response" << std::endl;
   });
 
   loop.run();
