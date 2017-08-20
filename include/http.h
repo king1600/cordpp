@@ -7,45 +7,55 @@
 namespace cordpp {
 
   using Json = nlohmann::json;
+  typedef std::function<void(const Json&)> JsonAction;
+  static const Json JsonEmpty = Json::parse("{}");
+  static const JsonAction JsonActionEmpty = [](const Json& j){};
 
-  class Request {
-  public:
+  struct Response {
+    int status;
+    bool gzipped;
     std::string body;
+  };
+
+  struct Request {
+    Json body;
     std::string method;
     std::string endpoint;
     std::string audit_reason;
   };
 
-  class Response {
-  public:
-    Json body;
-    int status;
-    std::map<std::string, std::string> headers;
+  struct RestTask {
+    Request req;
+    JsonAction action;
   };
 
-  class Route {
-  public:
+  struct RestRoute {
     bool limited;
-    std::deque<JsonAction> queue;
+    std::deque<RestTask> pending;
   };
-
-  static const Json JsonEmpty = Json::parse("{}");
-  typedef std::function<void(const Json&)> JsonAction;
-  typedef std::function<void(const Response&)> ResponseAction;
-  static const JsonAction JsonActionEmpty = [](const Json& j){};
 
   class RestClient {
   private:
     Service &service;
     std::string token;
     Response response;
-    Route global_route;
+    RestRoute global_route;
+    std::deque<RestTask> tasks;
     std::unique_ptr<SSLClient> conn;
-    std::deque<ResponseAction> queue;
     std::vector<std::string> cookies;
-    std::map<std::string, Route> routes;
+    std::map<std::string, RestRoute> routes;
 
     void parse_data();
+
+    void handle_response();
+
+    void connect_and_flush();
+
+    void perform_task(const RestTask &req);
+
+    RestRoute& get_route(const Request &req);
+
+    const std::string to_string(const Request &req);
 
   public:
     RestClient(Service &service);

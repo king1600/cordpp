@@ -122,26 +122,23 @@ void SSLClient::connect(const std::string &host,
 {
   // already connected
   if (connected) return;
+  connect_cb = action;
 
   // resolve the host
   tcp::resolver::query query(host, std::to_string(port));
   service.get_resolver().async_resolve(query, 
-  [this, &action] (const Error &err, tcp::resolver::iterator it) {;
-    if (err) { action(err); return; }
+  [this] (const Error &err, tcp::resolver::iterator it) {;
+    if (err) { connect_cb(err); return; }
 
     // connect to the endpoint
     asio::async_connect(sock.lowest_layer(), it,
-    [this, &action] (const Error &err, tcp::resolver::iterator it) {
-      if (err) { action(err); return; }
+    [this] (const Error &err, tcp::resolver::iterator it) {
+      if (err) { connect_cb(err); return; }
 
       // perform ssl handshake
-      sock.async_handshake(ssl::stream_base::client, [this, &action] (const Error &err) {
-        if (err) {
-          action(err);
-        } else {
-          connected = true;
-          action(Success);
-        }
+      sock.async_handshake(ssl::stream_base::client, [this] (const Error &err) {
+        connected = err ? false : true;
+        connect_cb(err ? err : Success);
       });
     });
   });

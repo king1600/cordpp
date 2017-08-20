@@ -45,6 +45,7 @@ namespace cordpp {
     bool connected;
     Service& service;
     BoostAction close_cb;
+    BoostAction connect_cb;
     asio::streambuf buffer;
     ssl::stream<tcp::socket> sock;
     std::deque<BufferAction> queue;
