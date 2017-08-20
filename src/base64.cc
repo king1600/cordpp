@@ -85,4 +85,3 @@ char *cordpp::b64_decode(const char *src, size_t length) {
 
     return buffer;
 }
-
