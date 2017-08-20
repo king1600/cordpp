@@ -54,11 +54,6 @@ void SSLClient::write(const std::string &data) {
   write(data.c_str(), data.size());
 }
 
-void SSLClient::read(const BufferAction& action) {
-  if (!connected) return;
-  read(1, action);
-}
-
 void SSLClient::read_handler(const Error &err, size_t bytes) {
   // close on error
   if (err) { close(err); return; }
@@ -73,12 +68,22 @@ void SSLClient::read_handler(const Error &err, size_t bytes) {
   action(Buffer(data, data + bytes));
 }
 
+void SSLClient::read(const BufferAction& action) {
+  if (!connected) return;
+  queue.push_back(action);
+  
+  // read at least {size} amount of data
+  asio::async_read(sock, buffer, asio::transfer_at_least(1),
+    boost::bind(&SSLClient::read_handler, this,
+      asio::placeholders::error, asio::placeholders::bytes_transferred));
+}
+
 void SSLClient::read(const unsigned int size, const BufferAction& action) {
   if (!connected) return;
   queue.push_back(action);
 
   // read at least {size} amount of data
-  asio::async_read(sock, buffer, asio::transfer_at_least(size),
+  asio::async_read(sock, buffer, asio::transfer_exactly(size),
     boost::bind(&SSLClient::read_handler, this,
       asio::placeholders::error, asio::placeholders::bytes_transferred));
 }

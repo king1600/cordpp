@@ -17,7 +17,7 @@ int main() {
       std::cout.write(&data[0], data.size());
       std::cout << std::endl << std::endl;
 
-      client.read_until("0\r\n\r\n", [](const Buffer &data) {
+      client.read([](const Buffer &data) {
         std::cout << "Got body: ";
         std::cout.write(&data[0], data.size());
         std::cout << std::endl;
