@@ -9,11 +9,6 @@ char *cordpp::b64_encode(const char *src, size_t length) {
     size_t encoded_length = ((length<<2)/3+3)&-4;
     char *buffer = new char[encoded_length + 1];
 
-    if (buffer == nullptr) {
-        printf("Call to malloc() in io::b64_encode() failed. Exiting...");
-        exit(EXIT_FAILURE);
-    }
-
     char *p = buffer;
     size_t i;
 
@@ -53,11 +48,6 @@ char *cordpp::b64_decode(const char *src, size_t length) {
     // instead of figuring out exactly how long the decoded string should be
     // allocate enough. at most this is an extra 2 bytes
     char *buffer = new char[(length * 3 >> 2) + 1];
-
-    if (buffer == nullptr) {
-        printf("Call to malloc() in io::b64_decode() failed. Exiting...");
-        exit(EXIT_FAILURE);
-    }
 
     char *p = buffer;
     size_t i;
