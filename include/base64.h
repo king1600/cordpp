@@ -1,6 +1,6 @@
 #pragma once
 
-namespace io {
+namespace cordpp {
     static const char B64_CHARSET[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     static const unsigned char B64_LOOKUP[256] = {
                     /* ASCII table */

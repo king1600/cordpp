@@ -2,9 +2,9 @@
 #include <cstdlib>
 #include <new>
 
-#include "io/base64.h"
+#include "base64.h"
 
-char *io::b64_encode(const char *src, size_t length) {
+char *cordpp::b64_encode(const char *src, size_t length) {
     // (length * 4 / 3) rounded up to nearest multiple of 4
     size_t encoded_length = ((length<<2)/3+3)&-4;
     char *buffer = (char*)malloc((sizeof *buffer) * encoded_length + 1);
@@ -43,7 +43,7 @@ char *io::b64_encode(const char *src, size_t length) {
     return buffer;
 }
 
-char *io::b64_decode(const char *src, size_t length) {
+char *cordpp::b64_decode(const char *src, size_t length) {
     // The input is invalid or not properly padded
     if (length % 4 != 0)
         return nullptr;
