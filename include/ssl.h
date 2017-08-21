@@ -18,12 +18,26 @@ namespace cordpp {
   typedef std::vector<char> Buffer;
   typedef std::function<void()> Action;
   typedef boost::system::error_code Error;
+  typedef std::function<void(void*)> RawAction;
   typedef std::function<void(const Error&)> BoostAction;
   typedef std::function<void(const Buffer&)> BufferAction;
 
   static const Error Success = 
   boost::system::errc::make_error_code(
     boost::system::errc::success);
+
+  class Timer {
+  private:
+    void *data;
+    RawAction action;
+    asio::deadline_timer timer;
+    std::function<void(Timer*)> callback;
+  public:
+    inline void* raw() { return data; }
+    inline RawAction& get() { return action; }
+    Timer(asio::io_service &service, const long delay_ms, void *data,
+      const RawAction &action, const std::function<void(Timer*)> &cb);
+  };
 
   class Service {
   private:
@@ -38,12 +52,14 @@ namespace cordpp {
     asio::io_service& get();
     tcp::resolver& get_resolver();
     ssl::context& get_ssl_context();
+    void call_later(const long delay, void *data, const RawAction &action);
   };
 
   class SSLClient {
   private:
     bool connected;
     Service& service;
+    size_t remaining;
     BoostAction close_cb;
     BoostAction connect_cb;
     asio::streambuf buffer;

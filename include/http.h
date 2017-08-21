@@ -15,6 +15,7 @@ namespace cordpp {
     int status;
     bool gzipped;
     std::string body;
+    std::map<std::string, std::string> headers;
   };
 
   struct Request {
@@ -30,7 +31,7 @@ namespace cordpp {
   };
 
   struct RestRoute {
-    bool limited;
+    bool rate_limited;
     std::deque<RestTask> pending;
   };
 
@@ -50,6 +51,8 @@ namespace cordpp {
     void handle_response();
 
     void connect_and_flush();
+
+    void flush_route(RestRoute &route);
 
     void perform_task(const RestTask &req);
 

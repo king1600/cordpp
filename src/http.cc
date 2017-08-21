@@ -1,8 +1,10 @@
 #include "http.h"
+#include <ctime>
 #include <sstream>
 
 using namespace cordpp;
 
+static const std::string CLRF = "\r\n";
 static const std::string http_prefix = "HTTP/x.x ";
 
 void RestClient::set_token(const std::string &token) {
@@ -10,16 +12,16 @@ void RestClient::set_token(const std::string &token) {
 }
 
 void RestClient::perform_task(const RestTask &task) {
-  std::cout << "Performing" << std::endl;
   RestRoute& route = get_route(task.req);
-  if (route.limited) {
+  if (route.rate_limited) {
     std::cout << "Rate limited" << std::endl;
     route.pending.push_back(task);
+  } else if (global_route.rate_limited) {
+    std::cout << "Global Rate limited" << std::endl;
+    global_route.pending.push_back(task);
   } else {
     std::cout << "Not rate limited" << std::endl;
-    std::string data = to_string(task.req);
-    std::cout << data << std::endl;
-    conn->write(data);
+    conn->write(to_string(task.req));
     tasks.push_back(task);
   }
 }
@@ -81,12 +83,12 @@ const std::string RestClient::to_string(const Request &req) {
 
   // add variable headers
   if (!req.audit_reason.empty())
-    output << "X-Audit-Log-Reason: " << req.audit_reason << "\r\n";
+    output << "X-Audit-Log-Reason: " << req.audit_reason << CLRF;
   if (!cookies.empty()) {
     output << "Cookie: ";
     for (const std::string &cookie : cookies)
       output << cookie << "; ";
-    output << "\r\n";
+    output << CLRF;
   }
 
   // add conditional body headers & create content
@@ -94,26 +96,76 @@ const std::string RestClient::to_string(const Request &req) {
     std::string content = req.body.dump();
     //output << "Content-Encoding: gzip\r\n";
     output << "Content-Type: application/json; charset=UTF-8\r\n";
-    output << "Content-Length: " << std::to_string(content.size()) << "\r\n";
-    output << "\r\n" << content;
-  } else output << "\r\n";
+    output << "Content-Length: " << std::to_string(content.size()) << CLRF;
+    output << CLRF << content;
+  } else output << CLRF;
 
   // return built http request
   return output.str();
 }
 
+void RestClient::flush_route(RestRoute &route) {
+  RestTask task;
+  route.rate_limited = false;
+  size_t i, remaining = route.pending.size();
+  for (i = 0; i < remaining; i++) {
+    task = std::move(route.pending.front());
+    route.pending.pop_front();
+    perform_task(task);
+  }
+}
+
 void RestClient::handle_response() {
-  // do all the stuff from parse_in_background() after parse_response()
-  std::cout << "Response: " << response.body << std::endl;
+  // if response.gzipped: response.body = ....
+  const Json data = Json::parse(response.body);
+  const RestTask task = std::move(tasks.front());
+  std::map<std::string, std::string> &headers = response.headers;
+  tasks.pop_front();
+
+  // check if next request will be rate limited
+  if (headers.find("X-RateLimit-Remaining") != headers.end()) {
+    if (std::stoi(headers["X-RateLimit-Remaining"], nullptr, 10) < 1) {
+
+      // get time to wait for rate limit
+      long wait_time;
+      if (headers.find("X-RateLimit-Reset") != headers.end()) {
+        const long now = static_cast<const long>(std::time(nullptr));
+        long reset = std::stol(headers["X-RateLimit-Reset"], nullptr, 10);
+        wait_time = (reset - now) * 1000;
+      } else if (headers.find("Retry-After") != headers.end()) {
+        wait_time = std::stol(headers["Retry-After"], nullptr, 10);
+      }
+
+      // if global, limit global route
+      if (data.find("global") != data.end()) {
+        if (data["global"].get<std::string>() == "true") {
+          global_route.rate_limited = true;
+          service.call_later(wait_time, nullptr, [this](void *data) {
+            flush_route(global_route);
+          });
+        }
+      }
+
+      // limit request route as well
+      RestRoute &route = get_route(task.req);
+      route.rate_limited = true;
+      service.call_later(wait_time, &route, [this](void *data) {
+        flush_route(*reinterpret_cast<RestRoute*>(data));
+      });
+    }
+  }
+
+  // start parsing again and perform callback with data
+  parse_data();
+  task.action(data);
 }
 
 void RestClient::parse_data() {
-  response = Response();
-  std::cout << conn->is_connected() << std::endl;
+  response.headers.empty();
   if (conn->is_connected()) {
 
     // parse status
-    conn->read_until("\r\n", [this](const Buffer &buf) {
+    conn->read_until(CLRF, [this](const Buffer &buf) {
       std::string data(buf.begin(), buf.end());
       data = data.substr(http_prefix.size());
       std::string status = data.substr(0, data.find(" "));
@@ -123,39 +175,45 @@ void RestClient::parse_data() {
       conn->read_until("\r\n\r\n", [this](const Buffer &buf) {
         std::string header;
         std::istringstream stream(&buf[0]);
-        std::map<std::string, std::string> headers;
         while (std::getline(stream, header) && header != "\r")
-          headers[header.substr(0, header.find(":"))] =
+          response.headers[header.substr(0, header.find(":"))] =
             header.substr(header.find(": ") + 2);
 
         // save any cookies
-        if (headers.find("Set-Cookie") != headers.end()) {
-          std::string cookie = headers["Set-Cookie"];
+        if (response.headers.find("Set-Cookie") != response.headers.end()) {
+          std::string cookie = response.headers["Set-Cookie"];
           cookies.push_back(cookie.substr(0, cookie.find(';')));
         }
 
-        for (auto const &entry : headers)
-          std::cout << entry.first << ": " << entry.second << std::endl;
-
         // check if response is gzipped
-        if (headers.find("Content-Encoding") != headers.end())
-          response.gzipped = headers["Content-Encoding"].find("gzip")
-            < headers["Content-Encoding"].size();
+        if (response.headers.find("Content-Encoding") != response.headers.end())
+          response.gzipped = response.headers["Content-Encoding"].find("gzip")
+            < response.headers["Content-Encoding"].size();
 
         // parse body for fixed size
-        if (headers.find("Content-Length") != headers.end()) {
+        if (response.headers.find("Content-Length") != response.headers.end()) {
           const unsigned int size = static_cast<const unsigned int>(
-            std::stoi(headers["Content-Length"], nullptr, 10));
-          std::cout << "Reading: " << size << std::endl;
+            std::stoi(response.headers["Content-Length"], nullptr, 10));
           conn->read(size, [this](const Buffer &buf) {
             response.body = std::string(buf.begin(), buf.end());
             handle_response();
           });
 
         // parse body for chunked buffers
-        } else if (headers.find("Transfer-Encoding") != headers.end()) {
-          conn->read_until("0\r\n", [this](const Buffer &buf) {
-            response.body = std::string(buf.begin(), buf.end());
+        } else if (response.headers.find("Transfer-Encoding") != response.headers.end()) {
+          conn->read_until("0\r\n\r\n", [this](const Buffer &buf) {
+            response.body = "";
+            size_t size_pos = 0;
+            unsigned int chunk_size = 0;
+            std::string body(buf.begin(), buf.end());
+            while (true) {
+              size_pos = body.find(CLRF);
+              chunk_size = static_cast<unsigned int>(std::stoi(
+                body.substr(0, size_pos), nullptr, 16));
+              if (chunk_size < 1) break;
+              response.body += body.substr(size_pos + CLRF.size(), chunk_size);
+              body = body.substr(size_pos + CLRF.size() + chunk_size + CLRF.size());
+            }
             handle_response();
           });
         }

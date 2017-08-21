@@ -23,8 +23,30 @@ ssl::context& Service::get_ssl_context() {
   return ssl_context;
 }
 
+void Service::call_later(const long delay, void *data, const RawAction &action)
+{
+  new Timer(service, delay, data, action, [](Timer *timer) {
+    const RawAction &action = std::move(timer->get());
+    action(timer->raw());
+    delete timer;
+  });
+}
+
+Timer::Timer(asio::io_service &service, const long delay_ms, void *data,
+  const RawAction &action, const std::function<void(Timer*)> &cb) : timer(service)
+{
+  this->data = data;
+  this->callback = cb;
+  this->action = action;
+  timer.expires_from_now(boost::posix_time::millisec(delay_ms));
+  timer.async_wait([this](const Error &err) {
+    if (!err) callback(this);
+  });
+}
+
 SSLClient::SSLClient(Service& service) :
   service(service), sock(service.get(), service.get_ssl_context()) {
+  remaining = 0;                          // no remaining read data
   connected = false;                      // client starts of disconnected
   on_close([](const Error &e) {});        // default close callback
   sock.set_verify_mode(ssl::verify_none); // no ssl verification 
@@ -62,17 +84,23 @@ void SSLClient::read_handler(const Error &err, size_t bytes) {
   const BufferAction action = std::move(queue.front());
   queue.pop_front();
 
+  // fix read_n incomplete size
+  bytes += remaining;
+  remaining = 0;
+
   // give the action its requested data
-  const char *data = asio::buffer_cast<const char*>(buffer.data());
+  const Buffer buf(
+    asio::buffers_begin(buffer.data()),
+    asio::buffers_begin(buffer.data()) + bytes);
   buffer.consume(bytes);
-  action(Buffer(data, data + bytes));
+  action(std::move(buf));
 }
 
 void SSLClient::read(const BufferAction& action) {
   if (!connected) return;
   queue.push_back(action);
   
-  // read at least {size} amount of data
+  // read some amount of data
   asio::async_read(sock, buffer, asio::transfer_at_least(1),
     boost::bind(&SSLClient::read_handler, this,
       asio::placeholders::error, asio::placeholders::bytes_transferred));
@@ -83,7 +111,10 @@ void SSLClient::read(const unsigned int size, const BufferAction& action) {
   queue.push_back(action);
 
   // read at least {size} amount of data
-  asio::async_read(sock, buffer, asio::transfer_exactly(size),
+  buffer.prepare(size);
+  remaining = buffer.size();
+  asio::async_read(sock, buffer,
+    asio::transfer_exactly(size - remaining),
     boost::bind(&SSLClient::read_handler, this,
       asio::placeholders::error, asio::placeholders::bytes_transferred));
 }
