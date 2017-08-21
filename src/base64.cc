@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <new>
 
@@ -40,19 +41,21 @@ char *cordpp::b64_encode(const char *src, size_t length) {
     return buffer;
 }
 
-char *cordpp::b64_decode(const char *src, size_t length) {
+char *cordpp::b64_decode(const char *src) {
+    size_t src_len = strlen(src);
+
     // The input is invalid or not properly padded
-    if (length % 4 != 0)
+    if (src_len % 4 != 0)
         return nullptr;
 
     // instead of figuring out exactly how long the decoded string should be
     // allocate enough. at most this is an extra 2 bytes
-    char *buffer = new char[(length * 3 >> 2) + 1];
+    char *buffer = new char[(src_len * 3 >> 2) + 1];
 
     char *p = buffer;
     size_t i;
 
-    for(i = 0; i < length - 4; i += 4) {
+    for(i = 0; i < src_len - 4; i += 4) {
         *p++ = (B64_LOOKUP[(int)src[i]] << 2 | B64_LOOKUP[(int)src[i+1]] >> 4) & 0xff;
         *p++ = (B64_LOOKUP[(int)src[i+1]] << 4 | B64_LOOKUP[(int)src[i+2]] >> 2) & 0xff;
         *p++ = (B64_LOOKUP[(int)src[i+2]] << 6 | B64_LOOKUP[(int)src[i+3]]) & 0xff;

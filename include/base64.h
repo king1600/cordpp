@@ -23,5 +23,5 @@ namespace cordpp {
     };
 
     char *b64_encode(const char *src, size_t length);
-    char *b64_decode(const char *src, size_t length);
+    char *b64_decode(const char *src);
 }
