@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <cstdint>
 #include <new>
 
 #include "base64.h"
@@ -15,10 +16,11 @@ char *cordpp::b64_encode(const char *src, size_t length) {
 
     for(i = 0; i < length-2; i += 3) {
         *p++ = B64_CHARSET[(src[i] >> 2) & 0x3F];
-        *p++ = B64_CHARSET[(src[i] << 4 | src[i+1] >> 4) & 0x3F];
-        *p++ = B64_CHARSET[(src[i+1] << 2 | src[i+2] >> 6) & 0x3F];
-        *p++ = B64_CHARSET[src[i+2] & 0x3F];
+        *p++ = B64_CHARSET[((uint8_t)src[i] << 4 | (uint8_t)src[i+1] >> 4) & 0x3F];
+        *p++ = B64_CHARSET[((uint8_t)src[i+1] << 2 | (uint8_t)src[i+2] >> 6) & 0x3F];
+        *p++ = B64_CHARSET[(uint8_t)src[i+2] & 0x3F];
     }
+
 
     // this returns 3 instead of 0 if we need no padding but
     // if we need no padding we dont need to do anything
@@ -56,22 +58,22 @@ char *cordpp::b64_decode(const char *src) {
     size_t i;
 
     for(i = 0; i < src_len - 4; i += 4) {
-        *p++ = (B64_LOOKUP[(int)src[i]] << 2 | B64_LOOKUP[(int)src[i+1]] >> 4) & 0xff;
-        *p++ = (B64_LOOKUP[(int)src[i+1]] << 4 | B64_LOOKUP[(int)src[i+2]] >> 2) & 0xff;
-        *p++ = (B64_LOOKUP[(int)src[i+2]] << 6 | B64_LOOKUP[(int)src[i+3]]) & 0xff;
+        *p++ = (B64_LOOKUP[(uint8_t)src[i]] << 2 | B64_LOOKUP[(uint8_t)src[i+1]] >> 4) & 0xff;
+        *p++ = (B64_LOOKUP[(uint8_t)src[i+1]] << 4 | B64_LOOKUP[(uint8_t)src[i+2]] >> 2) & 0xff;
+        *p++ = (B64_LOOKUP[(uint8_t)src[i+2]] << 6 | B64_LOOKUP[(uint8_t)src[i+3]]) & 0xff;
     }
 
-    *p++ = (B64_LOOKUP[(int)src[i]] << 2 | B64_LOOKUP[(int)src[i+1]] >> 4) & 0xff;
+    *p++ = (B64_LOOKUP[(uint8_t)src[i]] << 2 | B64_LOOKUP[(uint8_t)src[i+1]] >> 4) & 0xff;
 
     if (src[i+2] != '=') {
-        *p++ = (B64_LOOKUP[(int)src[i+1]] << 4 | B64_LOOKUP[(int)src[i+2]] >> 2) & 0xff;
+        *p++ = (B64_LOOKUP[(uint8_t)src[i+1]] << 4 | B64_LOOKUP[(uint8_t)src[i+2]] >> 2) & 0xff;
         if (src[i+3] != '=') {
-            *p++ = (B64_LOOKUP[(int)src[i+2]] << 6 | B64_LOOKUP[(int)src[i+3]]) & 0xff;
+            *p++ = (B64_LOOKUP[(uint8_t)src[i+2]] << 6 | B64_LOOKUP[(uint8_t)src[i+3]]) & 0xff;
         } else {
-            *p++ = B64_LOOKUP[(int)src[i+2]] << 6 & 0xff;
+            *p++ = B64_LOOKUP[(uint8_t)src[i+2]] << 6 & 0xff;
         }
     } else {
-        *p++ = B64_LOOKUP[(int)src[i+1]] << 4 & 0xff;
+        *p++ = B64_LOOKUP[(uint8_t)src[i+1]] << 4 & 0xff;
     }
 
     *p = '\0';
