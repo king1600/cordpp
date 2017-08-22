@@ -20,8 +20,8 @@ WebsockClient::WebsockClient(Service &service)
   frame.payload = nullptr;
   state = WebsockState::closed;
   on_connect([](const Error &err) {});
-  on_message([](const std::string &buf) {});
   on_close([](const WebsockCloseData &data) {});
+  on_message([](const char* data, const size_t len) {});
 }
 
 void WebsockClient::connect(const std::string &host) {
@@ -123,7 +123,8 @@ void WebsockClient::parse_length() {
 
   // read remaining data of size if not
   } else {
-    connection.read(frame.payload_len, [this](const Buffer &buf) {
+    const uint8_t padding = frame.payload_len < 0x10000 ? 2 : 8;
+    connection.read(padding, [this](const Buffer &buf) {
       size_t payload_size = 0;
 
       // 16-bit payload
@@ -210,26 +211,29 @@ void WebsockClient::handle_frame() {
       if (state != WebsockState::closed) {
         send(frame.payload, frame.payload_len, WebsockOp::close);
         state = WebsockState::closed;
-      } else {
-        WebsockCloseData close_data;
-        close_data.code = (frame.payload[0] & 0xff) << 8;
-        close_data.code |= frame.payload[1] & 0xff;
-        if (frame.payload_len > 2)
-          close_data.reason = std::string(
-            frame.payload, frame.payload + 2);
-        connection.close(Success);
-        close_cb(close_data);
       }
+      perform_close();
       break;
 
     // handle opcodes for binary and text
     default:
-      message_cb(std::string(frame.payload));
+      message_cb(frame.payload, frame.payload_len);
       break;
   }
 
   // read the next frame
   parse_headers();
+}
+
+void WebsockClient::perform_close() {
+  WebsockCloseData close_data;
+  close_data.code = (frame.payload[0] & 0xff) << 8;
+  close_data.code |= frame.payload[1] & 0xff;
+  if (frame.payload_len > 2)
+    close_data.reason = std::string(
+      frame.payload + 2, frame.payload_len);
+  connection.close(Success);
+  close_cb(close_data);
 }
 
 void WebsockClient::ping(const WebsockPingAction &action) {
@@ -266,15 +270,18 @@ void WebsockClient::send(const char *data, const size_t len, WebsockOp op) {
   uint64_t i, offset = 0;
   uint8_t output[6 + len + padding];
 
-  // add the two byte header
+  // add the first byte header
   output[offset++] = 0x80 | static_cast<uint8_t>(op);
-  output[offset++] = 0x80 | (padding > 0 ? padding : len);
 
-  // add any remaining payload length
-  if (padding == 2) {
+  // add the payload length
+  if (padding == 0) {
+    output[offset++] = 0x80 | len;
+  } else if (padding == 2) {
+    output[offset++] = 0x80 | 0x7e;
     output[offset++] = (len >> 8) & 0xff;
     output[offset++] = len & 0xff;
   } else if (padding == 8) {
+    output[offset++] = 0x80 | 0x7f;
     output[offset++] = (len >> 56) & 0xff;
     output[offset++] = (len >> 48) & 0xff;
     output[offset++] = (len >> 40) & 0xff;
@@ -285,7 +292,7 @@ void WebsockClient::send(const char *data, const size_t len, WebsockOp op) {
     output[offset++] = len & 0xff;
   }
 
-  // add mask
+  // add the mask and get its offset
   uint8_t mask_offset = offset;
   output[offset++] = rand_byte();
   output[offset++] = rand_byte();

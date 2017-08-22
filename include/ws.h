@@ -28,7 +28,7 @@ namespace cordpp {
 
   typedef std::chrono::steady_clock websock_clock;
   typedef std::function<void(const long)> WebsockPingAction;
-  typedef std::function<void(const std::string&)> StringAction;
+  typedef std::function<void(const char*, const size_t)> DataAction;
   typedef std::function<void(const WebsockCloseData&)> WebsockCloseAction;
 
   struct WebsockPing {
@@ -42,8 +42,8 @@ namespace cordpp {
     WebsockFrame frame;
     SSLClient connection;
 
+    DataAction message_cb;
     BoostAction connect_cb;
-    StringAction message_cb;
     WebsockCloseAction close_cb;
     std::deque<WebsockPing> pings;
 
@@ -55,6 +55,8 @@ namespace cordpp {
 
     void parse_payload();
 
+    void perform_close();
+
     void start_handshake(const std::string &host);
 
   public:
@@ -65,15 +67,15 @@ namespace cordpp {
 
     void ping(const WebsockPingAction &action);
 
-    void close(const uint16_t code, const std::string &reason);
-
     void send(const char *data, const size_t len, WebsockOp op);
+
+    void close(const uint16_t code = 1000, const std::string &reason = "");
 
     inline void on_connect(const BoostAction &action) {
       connect_cb = action;
     }
 
-    inline void on_message(const StringAction &action) {
+    inline void on_message(const DataAction &action) {
       message_cb = action;
     }
 

@@ -135,7 +135,8 @@ void RestClient::flush_route(RestRoute &route) {
 
 void RestClient::handle_response() {
   // if response.gzipped: response.body = ....
-  const Json data = Json::parse(response.body);
+  const Json data = Json::parse(
+    response.body.empty() ? "{}" : response.body);
   const RestTask task = std::move(tasks.front());
   std::map<std::string, std::string> &headers = response.headers;
   tasks.pop_front();
