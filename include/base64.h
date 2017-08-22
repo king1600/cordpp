@@ -2,7 +2,7 @@
 
 namespace cordpp {
     static const char B64_CHARSET[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    static const unsigned char B64_LOOKUP[256] = {
+    static const char B64_LOOKUP[256] = {
                     /* ASCII table */
                     64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
                     64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
