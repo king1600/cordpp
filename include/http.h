@@ -8,7 +8,6 @@ namespace cordpp {
 
   using Json = nlohmann::json;
   typedef std::function<void(const Json&)> JsonAction;
-  static const Json JsonEmpty = Json::parse("{}");
   static const JsonAction JsonActionEmpty = [](const Json& j){};
 
   struct Response {
@@ -65,8 +64,20 @@ namespace cordpp {
 
     void set_token(const std::string &token);
 
+    void get(const std::string &endpoint, const std::string &audit,
+      const Json &data = {}, const JsonAction &action = JsonActionEmpty);
+
+    void post(const std::string &endpoint, const std::string &audit,
+      const Json &data = {}, const JsonAction &action = JsonActionEmpty);
+
+    void put(const std::string &endpoint, const std::string &audit,
+      const Json &data = {}, const JsonAction &action = JsonActionEmpty);
+
+    void del(const std::string &endpoint, const std::string &audit,
+      const Json &data = {}, const JsonAction &action = JsonActionEmpty);
+
     void request(const std::string &method, const std::string &endpoint,
-      const std::string &audit, const Json &data = JsonEmpty,
+      const std::string &audit, const Json &data = {},
       const JsonAction &action = JsonActionEmpty);
   };
 

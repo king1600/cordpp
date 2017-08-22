@@ -11,19 +11,24 @@ void RestClient::set_token(const std::string &token) {
   this->token = token;
 }
 
-void RestClient::perform_task(const RestTask &task) {
-  RestRoute& route = get_route(task.req);
-  if (route.rate_limited) {
-    std::cout << "Rate limited" << std::endl;
-    route.pending.push_back(task);
-  } else if (global_route.rate_limited) {
-    std::cout << "Global Rate limited" << std::endl;
-    global_route.pending.push_back(task);
-  } else {
-    std::cout << "Not rate limited" << std::endl;
-    conn->write(to_string(task.req));
-    tasks.push_back(task);
-  }
+void RestClient::get(const std::string &endpoint, const std::string &audit,
+  const Json &data, const JsonAction &action) {
+  request("GET", endpoint, audit, data, action);
+}
+
+void RestClient::post(const std::string &endpoint, const std::string &audit,
+  const Json &data, const JsonAction &action) {
+  request("POST", endpoint, audit, data, action);
+}
+
+void RestClient::put(const std::string &endpoint, const std::string &audit,
+  const Json &data, const JsonAction &action) {
+  request("PUT", endpoint, audit, data, action);  
+}
+
+void RestClient::del(const std::string &endpoint, const std::string &audit,
+  const Json &data, const JsonAction &action) {
+  request("DELETE", endpoint, audit, data, action);
 }
 
 RestRoute& RestClient::get_route(const Request &req) {
@@ -44,7 +49,20 @@ void RestClient::request(const std::string &method, const std::string &endpoint,
     perform_task(task);
 }
 
+void RestClient::perform_task(const RestTask &task) {
+  RestRoute& route = get_route(task.req);
+  if (route.rate_limited) {
+    route.pending.push_back(task);
+  } else if (global_route.rate_limited) {
+    global_route.pending.push_back(task);
+  } else {
+    conn->write(to_string(task.req));
+    tasks.push_back(task);
+  }
+}
+
 RestClient::RestClient(Service &s) : service(s) {
+  global_route.rate_limited = false;
   conn = std::make_unique<SSLClient>(service);
   conn->on_close([this](const Error &err) {
     conn.reset(new SSLClient(service));
