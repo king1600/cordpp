@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ws.h"
+#include "user.h"
 
 namespace cordpp {
 

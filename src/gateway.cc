@@ -38,9 +38,10 @@ Gateway::Gateway(Client *client,
   const std::string &host, uint8_t &id, uint8_t &max)
   : shard_id(id), max_shards(max), beat(client->service.get())
 {
-  is_resume = false;
   this->host_url = host; 
   this->client = client;
+  this->resume_delay = 0;
+  this->is_resume = false;
   conn = std::make_unique<WebsockClient>(client->service);
   connect(); 
 }
