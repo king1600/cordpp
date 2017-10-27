@@ -1,2 +1,2 @@
 # cordpp
-Oh look! another discord client for cpp
+Oh look! another half-finished discord client for cpp
